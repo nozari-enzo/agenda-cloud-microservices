@@ -1,0 +1,19 @@
+# Requer o kube-prometheus-stack (CRD ServiceMonitor). Faz o Prometheus coletar /metrics
+# de todas as réplicas dos micro serviços (Services com o label app.kubernetes.io/part-of=agenda).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: agenda-microservices
+  namespace: agenda
+  labels:
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: agenda
+  namespaceSelector:
+    matchNames: [agenda]
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s

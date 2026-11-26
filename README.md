@@ -41,7 +41,7 @@ Pequenos negócios de serviços (salões de beleza, barbearias, clínicas de est
 | RF02 | Cadastro de serviços (nome, duração, preço) e profissionais | `catalog-service` |
 | RF03 | Consulta de horários disponíveis por profissional/serviço | `booking-service` |
 | RF04 | Criar, remarcar e cancelar agendamentos | `booking-service` |
-| RF05 | Notificação de confirmação e lembrete (e-mail/simulado) | `notification-service` |
+| RF05 | Notificação de confirmação, cancelamento e lembrete 24h antes (e-mail simulado) | `notification-service` |
 | RF06 | Painel administrativo com agenda do dia | `frontend` |
 
 ### Não funcionais
@@ -57,7 +57,7 @@ Pequenos negócios de serviços (salões de beleza, barbearias, clínicas de est
 ```mermaid
 flowchart LR
     U[Usuário / Navegador] --> GW[API Gateway<br/>Nginx / Ingress]
-    GW --> FE[frontend<br/>React + Nginx]
+    GW --> FE[frontend<br/>HTML/JS + Nginx]
     GW --> AUTH[auth-service]
     GW --> CAT[catalog-service]
     GW --> BOOK[booking-service]
@@ -81,12 +81,29 @@ flowchart LR
 ### Camadas
 | Camada | Componentes |
 |--------|-------------|
-| Frontend | SPA React servida por Nginx |
-| Backend | Micro serviços em Node.js (Express): `auth`, `catalog`, `booking`, `notification` |
-| Mensageria | RabbitMQ (comunicação assíncrona entre `booking` e `notification`) |
-| Banco de dados | PostgreSQL (um schema por serviço) |
-| Infraestrutura | Docker Compose (dev) e Kubernetes local (k3d/minikube) |
-| Observabilidade | Prometheus, Grafana, Loki, Promtail |
+| Frontend | SPA em HTML/CSS/JavaScript puro servida por Nginx |
+| API Gateway | Nginx: ponto único de entrada, roteia `/api/*` e balanceia entre réplicas |
+| Backend | Micro serviços em Node.js 22 (Express 5): `auth`, `catalog`, `booking`, `notification` |
+| Mensageria | RabbitMQ (exchange `agenda`, fila `notifications` com dead-letter queue) |
+| Banco de dados | PostgreSQL 16 (um schema por serviço: `auth`, `catalog`, `booking`, `notif`) |
+| Infraestrutura | Docker Compose (dev/demo) e Kubernetes (k3d) com HPA |
+| Observabilidade | Prometheus, Grafana, Loki, Promtail, postgres-exporter, nginx-exporter |
+
+### Micro serviços e rotas
+
+| Serviço | Rotas (via gateway) | Responsabilidade |
+|---------|---------------------|------------------|
+| `auth-service` | `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/me` | usuários, senhas (bcrypt) e emissão de JWT |
+| `catalog-service` | `GET/POST /api/catalog/services`, `GET/POST /api/catalog/professionals` | serviços oferecidos e profissionais |
+| `booking-service` | `GET /api/bookings/availability`, `POST /api/bookings/`, `GET /api/bookings/me`, `PATCH /api/bookings/:id/cancel` | horários livres e agendamentos; publica eventos |
+| `notification-service` | `GET /api/notifications/` | consome eventos, envia confirmações e lembretes |
+
+Todos expõem `/health` (liveness), `/ready` (readiness, testa o banco) e `/metrics` (Prometheus). O gateway bloqueia essas rotas para acesso externo.
+
+**Comunicação:**
+- **Síncrona (HTTP):** `booking-service` consulta o `catalog-service` para validar serviço e profissional.
+- **Assíncrona (eventos):** `booking-service` publica `booking.created` e `booking.cancelled`, e o `notification-service` consome. Se o notificador estiver fora, os eventos esperam na fila.
+- **Autenticação distribuída:** o `auth-service` emite o JWT e os outros serviços validam a assinatura localmente, sem chamar o `auth-service` a cada requisição.
 
 ## 4. Fluxos da aplicação
 
@@ -96,6 +113,10 @@ flowchart LR
 3. Cliente escolhe data → `booking-service` calcula horários livres.
 4. Cliente confirma → `booking-service` grava no PostgreSQL e publica `agendamento.criado` no RabbitMQ.
 5. `notification-service` consome o evento e envia a confirmação (log/e-mail simulado).
+6. A cada minuto, o `notification-service` envia lembretes dos agendamentos que começam nas próximas 24h.
+
+### Concorrência
+Duas pessoas podem tentar o mesmo horário ao mesmo tempo, em réplicas diferentes. O `booking-service` usa um *advisory lock* do PostgreSQL por profissional dentro da transação: só uma reserva vence, e a outra recebe `409`. Os lembretes usam `FOR UPDATE SKIP LOCKED`, então duas réplicas nunca enviam o mesmo lembrete.
 
 *(diagramas de sequência em [`docs/arquitetura.md`](docs/arquitetura.md))*
 
@@ -114,38 +135,103 @@ flowchart LR
 
 | Pilar | Ferramenta | Como |
 |-------|-----------|------|
-| Métricas | Prometheus + `prom-client` | cada serviço expõe `/metrics` (requisições, latência, erros, agendamentos criados) |
-| Logs | Loki + Promtail | logs estruturados em JSON (pino) coletados dos containers |
-| Dashboards | Grafana | dashboards de tráfego, latência p95, taxa de erro, recursos e negócio |
-| Alertas | Grafana Alerting | ex.: taxa de erro > 5% ou serviço fora do ar |
+| Métricas | Prometheus + `prom-client` | cada réplica expõe `/metrics`; o Prometheus descobre as réplicas por DNS (`dns_sd_configs`) |
+| Métricas de infra | postgres-exporter, nginx-exporter, plugin Prometheus do RabbitMQ | conexões no banco, tráfego do gateway, tamanho das filas |
+| Logs | Loki + Promtail | logs estruturados em JSON (pino) lidos do Docker; o nível do log (`level`) vira label |
+| Dashboards | Grafana (provisionado automaticamente) | dashboard "Agenda Fácil: visão geral" |
+| Alertas | Regras do Prometheus ([alerts.yml](observability/prometheus/alerts.yml)) | instância fora do ar, réplicas abaixo de 2, erro 5xx > 5%, p95 > 500 ms, fila acumulando, eventos na DLQ |
+
+### Métricas expostas pela aplicação
+
+| Métrica | Tipo | Serviço |
+|---------|------|---------|
+| `http_requests_total{method,route,status_code}` | counter | todos |
+| `http_request_duration_seconds` | histogram | todos |
+| `auth_logins_total{result}`, `auth_registrations_total` | counter | auth |
+| `bookings_created_total`, `bookings_cancelled_total`, `booking_conflicts_total` | counter | booking |
+| `catalog_request_duration_seconds` | histogram | booking (chamada ao catalog) |
+| `events_published_total{routing_key,result}` | counter | booking |
+| `notifications_sent_total{type}`, `events_failed_total` | counter | notification |
+| `notification_delivery_lag_seconds` | histogram | notification |
+| métricas padrão do processo (CPU, memória, event loop) | vários | todos |
+
+### Dashboard
+
+O dashboard ([agenda-overview.json](observability/grafana/dashboards/agenda-overview.json)) tem:
+- **Visão geral:** instâncias no ar, req/s, taxa de erro, latência p95, agendamentos e notificações
+- **Tráfego:** req/s e p95 por serviço, respostas por código HTTP, requisições por réplica (mostra o balanceamento)
+- **Negócio:** agendamentos, cancelamentos e conflitos; notificações por tipo
+- **Infra:** fila do RabbitMQ, atraso evento→notificação, conexões no PostgreSQL, CPU e memória por réplica
+- **Logs:** logs do Loki filtráveis por serviço e contagem de warn/error
 
 ## 7. Estrutura do repositório
 
 ```
 .
-├── docs/                 # RACI, arquitetura, apresentação, evidências
-├── frontend/             # SPA React
+├── docker-compose.yml    # ambiente completo (app + dados + observabilidade)
+├── docs/                 # RACI, arquitetura, evidências
+├── frontend/             # SPA (HTML/CSS/JS) + Nginx
+├── gateway/              # API Gateway (Nginx)
 ├── services/
 │   ├── auth-service/
 │   ├── catalog-service/
 │   ├── booking-service/
 │   └── notification-service/
 ├── infra/
-│   ├── docker/           # docker-compose
-│   ├── k8s/              # manifests Kubernetes
-│   └── terraform/        # IaC (opcional)
-└── observability/        # Prometheus, Grafana, Loki
+│   └── k8s/              # manifests Kubernetes (Deployments, HPA, PDB, StatefulSets)
+├── observability/
+│   ├── prometheus/       # scrape e regras de alerta
+│   ├── loki/ promtail/   # logs
+│   └── grafana/          # datasources e dashboard provisionados
+└── scripts/
+    └── gerar-trafego.mjs # gera carga para métricas e dashboards
 ```
+
+Cada serviço tem sua própria cópia de `src/lib/` (logs, métricas, JWT). A cópia é intencional: os micro serviços são independentes e não compartilham build.
 
 ## 8. Como executar
 
-> Em construção.
+Pré-requisito: [Docker Desktop](https://www.docker.com/products/docker-desktop/).
 
 ```bash
-# desenvolvimento
-docker compose -f infra/docker/docker-compose.yml up -d --build
+docker compose up -d --build
+docker compose ps
 ```
+
+| O quê | Endereço | Acesso |
+|-------|----------|--------|
+| Aplicação | http://localhost:8080 | admin: `admin@agenda.local` / `admin123`, ou crie uma conta |
+| Grafana | http://localhost:3000 | `admin` / `admin` |
+| Prometheus | http://localhost:9090 | Status → Targets mostra as 8 réplicas |
+| RabbitMQ | http://localhost:15672 | `agenda` / `agenda` |
+
+Para gerar tráfego e popular os dashboards (precisa do Node 18 ou mais novo):
+
+```bash
+node scripts/gerar-trafego.mjs --minutos 5 --concorrencia 10
+```
+
+Para testar a alta disponibilidade no Compose:
+
+```bash
+docker compose stop notification-service   # os eventos ficam na fila do RabbitMQ
+docker compose start notification-service  # as notificações pendentes são processadas
+docker compose up -d --scale booking-service=4 --no-recreate
+```
+
+Para rodar no Kubernetes, veja [infra/k8s/README.md](infra/k8s/README.md).
 
 ## 9. Evidências (logs e dashboards)
 
-> Prints e logs da aplicação em funcionamento ficarão em [`docs/evidencias/`](docs/evidencias/).
+Logs reais da aplicação rodando no Docker Compose, gerados com `scripts/gerar-trafego.mjs`, estão em [`docs/evidencias/`](docs/evidencias/):
+
+| Arquivo | Conteúdo |
+|---------|----------|
+| `logs-gateway.log` | acessos em JSON com status, tempo e réplica que atendeu (`upstream`) |
+| `logs-*-service.log` | logs estruturados de cada micro serviço |
+| `logs-notificacoes-eventos.log` | confirmações, cancelamentos e lembretes disparados por eventos do RabbitMQ |
+| `prometheus-targets.txt` | as 8 réplicas e os exporters coletados pelo Prometheus |
+
+Testes de alta disponibilidade feitos:
+- **Notificador desligado:** os eventos ficaram na fila do RabbitMQ (`consumidores=0`) e foram processados quando o serviço voltou.
+- **Réplica derrubada:** com uma das réplicas do `booking-service` parada, todas as requisições seguiram respondendo `200`.

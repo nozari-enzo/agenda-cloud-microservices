@@ -1,0 +1,204 @@
+# Ambiente completo: aplicação + banco + mensageria + observabilidade.
+#   docker compose up -d --build
+# Aplicação: http://localhost:8080 · Grafana: http://localhost:3000 · Prometheus: http://localhost:9090
+# RabbitMQ: http://localhost:15672
+name: agenda
+
+x-service-env: &service-env
+  DATABASE_URL: postgresql://${POSTGRES_USER:-agenda}:${POSTGRES_PASSWORD:-agenda}@postgres:5432/${POSTGRES_DB:-agenda}
+  RABBITMQ_URL: amqp://${RABBITMQ_USER:-agenda}:${RABBITMQ_PASSWORD:-agenda}@rabbitmq:5672
+  JWT_SECRET: ${JWT_SECRET:-troque-este-segredo}
+  APP_TIMEZONE: America/Sao_Paulo
+
+# Configuração comum dos micro serviços Node.js: 2 réplicas, limites de recurso e logs coletados pelo Promtail.
+x-node-service: &node-service
+  restart: unless-stopped
+  labels:
+    logging: promtail
+  deploy:
+    replicas: 2
+    resources:
+      limits:
+        cpus: "0.50"
+        memory: 256M
+  depends_on:
+    postgres:
+      condition: service_healthy
+    rabbitmq:
+      condition: service_healthy
+
+services:
+  # ---------------- Dados ----------------
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-agenda}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agenda}
+      POSTGRES_DB: ${POSTGRES_DB:-agenda}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-agenda}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-agenda}
+    ports:
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ---------------- Micro serviços ----------------
+  auth-service:
+    <<: *node-service
+    build: ./services/auth-service
+    image: agenda/auth-service:1.0.0
+    environment:
+      <<: *service-env
+      SERVICE_NAME: auth-service
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@agenda.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+
+  catalog-service:
+    <<: *node-service
+    build: ./services/catalog-service
+    image: agenda/catalog-service:1.0.0
+    environment:
+      <<: *service-env
+      SERVICE_NAME: catalog-service
+
+  booking-service:
+    <<: *node-service
+    build: ./services/booking-service
+    image: agenda/booking-service:1.0.0
+    environment:
+      <<: *service-env
+      SERVICE_NAME: booking-service
+      CATALOG_URL: http://catalog-service:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      catalog-service:
+        condition: service_healthy
+
+  notification-service:
+    <<: *node-service
+    build: ./services/notification-service
+    image: agenda/notification-service:1.0.0
+    environment:
+      <<: *service-env
+      SERVICE_NAME: notification-service
+
+  # ---------------- Frontend e gateway ----------------
+  frontend:
+    build: ./frontend
+    image: agenda/frontend:1.0.0
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+
+  gateway:
+    build: ./gateway
+    image: agenda/gateway:1.0.0
+    restart: unless-stopped
+    labels:
+      logging: promtail
+    ports:
+      - "8080:80"
+    depends_on:
+      frontend:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      catalog-service:
+        condition: service_healthy
+      booking-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+
+  # ---------------- Observabilidade ----------------
+  prometheus:
+    image: prom/prometheus:v2.53.2
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle
+    volumes:
+      - ./observability/prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+
+  loki:
+    image: grafana/loki:3.1.1
+    restart: unless-stopped
+    command: -config.file=/etc/loki/loki.yml
+    volumes:
+      - ./observability/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki-data:/loki
+
+  promtail:
+    image: grafana/promtail:3.1.1
+    restart: unless-stopped
+    command: -config.file=/etc/promtail/promtail.yml
+    volumes:
+      - ./observability/promtail/promtail.yml:/etc/promtail/promtail.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - loki
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_DEFAULT_LANGUAGE: pt-BR
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+      - loki
+
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: postgresql://${POSTGRES_USER:-agenda}:${POSTGRES_PASSWORD:-agenda}@postgres:5432/${POSTGRES_DB:-agenda}?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:1.3.0
+    restart: unless-stopped
+    command: --nginx.scrape-uri=http://gateway/nginx_status
+    depends_on:
+      - gateway
+
+volumes:
+  postgres-data:
+  rabbitmq-data:
+  prometheus-data:
+  loki-data:
+  grafana-data:
