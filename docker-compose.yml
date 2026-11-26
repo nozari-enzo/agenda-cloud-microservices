@@ -5,9 +5,9 @@
 name: agenda
 
 x-service-env: &service-env
-  DATABASE_URL: postgresql://${POSTGRES_USER:-agenda}:${POSTGRES_PASSWORD:-agenda}@postgres:5432/${POSTGRES_DB:-agenda}
-  RABBITMQ_URL: amqp://${RABBITMQ_USER:-agenda}:${RABBITMQ_PASSWORD:-agenda}@rabbitmq:5672
-  JWT_SECRET: ${JWT_SECRET:-troque-este-segredo}
+  DATABASE_URL: postgresql://${POSTGRES_USER:?defina POSTGRES_USER no arquivo .env}:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no arquivo .env}@postgres:5432/${POSTGRES_DB:?defina POSTGRES_DB no arquivo .env}
+  RABBITMQ_URL: amqp://${RABBITMQ_USER:?defina RABBITMQ_USER no arquivo .env}:${RABBITMQ_PASSWORD:?defina RABBITMQ_PASSWORD no arquivo .env}@rabbitmq:5672
+  JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no arquivo .env}
   APP_TIMEZONE: America/Sao_Paulo
 
 # Configuração comum dos micro serviços Node.js: 2 réplicas, limites de recurso e logs coletados pelo Promtail.
@@ -33,9 +33,9 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-agenda}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agenda}
-      POSTGRES_DB: ${POSTGRES_DB:-agenda}
+      POSTGRES_USER: ${POSTGRES_USER:?defina POSTGRES_USER no arquivo .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no arquivo .env}
+      POSTGRES_DB: ${POSTGRES_DB:?defina POSTGRES_DB no arquivo .env}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -48,8 +48,8 @@ services:
     image: rabbitmq:3.13-management-alpine
     restart: unless-stopped
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-agenda}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-agenda}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?defina RABBITMQ_USER no arquivo .env}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?defina RABBITMQ_PASSWORD no arquivo .env}
     ports:
       - "15672:15672"
     volumes:
@@ -68,8 +68,8 @@ services:
     environment:
       <<: *service-env
       SERVICE_NAME: auth-service
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@agenda.local}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?defina ADMIN_EMAIL no arquivo .env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?defina ADMIN_PASSWORD no arquivo .env}
 
   catalog-service:
     <<: *node-service
@@ -167,8 +167,8 @@ services:
     image: grafana/grafana:11.2.0
     restart: unless-stopped
     environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:?defina GRAFANA_USER no arquivo .env}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?defina GRAFANA_PASSWORD no arquivo .env}
       GF_USERS_DEFAULT_LANGUAGE: pt-BR
     volumes:
       - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
@@ -184,7 +184,7 @@ services:
     image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
     restart: unless-stopped
     environment:
-      DATA_SOURCE_NAME: postgresql://${POSTGRES_USER:-agenda}:${POSTGRES_PASSWORD:-agenda}@postgres:5432/${POSTGRES_DB:-agenda}?sslmode=disable
+      DATA_SOURCE_NAME: postgresql://${POSTGRES_USER:?defina POSTGRES_USER no arquivo .env}:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no arquivo .env}@postgres:5432/${POSTGRES_DB:?defina POSTGRES_DB no arquivo .env}?sslmode=disable
     depends_on:
       postgres:
         condition: service_healthy

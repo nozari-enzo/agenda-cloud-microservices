@@ -193,6 +193,16 @@ Cada serviço tem sua própria cópia de `src/lib/` (logs, métricas, JWT). A c�
 
 Pré-requisito: [Docker Desktop](https://www.docker.com/products/docker-desktop/).
 
+**1. Configure os segredos.** Nenhuma senha fica no repositório. Copie o modelo e troque todos os valores:
+
+```bash
+cp .env.example .env      # no Windows: copy .env.example .env
+```
+
+O `.env` está no `.gitignore` e nunca vai para o GitHub. Se faltar alguma variável, o `docker compose` para com um aviso dizendo qual é.
+
+**2. Suba o ambiente.**
+
 ```bash
 docker compose up -d --build
 docker compose ps
@@ -200,10 +210,20 @@ docker compose ps
 
 | O quê | Endereço | Acesso |
 |-------|----------|--------|
-| Aplicação | http://localhost:8080 | admin: `admin@agenda.local` / `admin123`, ou crie uma conta |
-| Grafana | http://localhost:3000 | `admin` / `admin` |
+| Aplicação | http://localhost:8080 | admin: `ADMIN_EMAIL` / `ADMIN_PASSWORD` do `.env`, ou crie uma conta |
+| Grafana | http://localhost:3000 | `GRAFANA_USER` / `GRAFANA_PASSWORD` do `.env` |
 | Prometheus | http://localhost:9090 | Status → Targets mostra as 8 réplicas |
-| RabbitMQ | http://localhost:15672 | `agenda` / `agenda` |
+| RabbitMQ | http://localhost:15672 | `RABBITMQ_USER` / `RABBITMQ_PASSWORD` do `.env` |
+
+### Gestão de segredos
+
+| Ambiente | Onde ficam as senhas |
+|----------|----------------------|
+| Docker Compose | `.env` local (modelo em `.env.example`) |
+| Kubernetes | `infra/k8s/secrets.env`, transformado em `Secret` pelo kustomize (modelo em `secrets.env.example`) |
+| Produção (cenário) | gerenciador de segredos: AWS Secrets Manager, Azure Key Vault, Vault ou External Secrets |
+
+Os serviços também se recusam a iniciar sem `JWT_SECRET`: não existe senha padrão escondida no código.
 
 Para gerar tráfego e popular os dashboards (precisa do Node 18 ou mais novo):
 

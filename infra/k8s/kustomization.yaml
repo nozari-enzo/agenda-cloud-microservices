@@ -12,3 +12,11 @@ resources:
   - 23-notification-service.yaml
   - 30-frontend.yaml
   - 31-gateway.yaml
+
+# Senhas vêm de secrets.env, que NÃO vai para o Git (veja secrets.env.example).
+secretGenerator:
+  - name: agenda-secrets
+    envs:
+      - secrets.env
+generatorOptions:
+  disableNameSuffixHash: true

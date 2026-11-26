@@ -5,3 +5,9 @@ node_modules/
 Thumbs.db
 .terraform/
 *.tfstate*
+
+# Segredos do Kubernetes
+infra/k8s/secrets.env
+
+# Logs de evidência da aplicação (entregável do trabalho)
+!docs/evidencias/*.log

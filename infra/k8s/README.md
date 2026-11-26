@@ -36,7 +36,10 @@ k3d image import -c agenda \
 
 ## 3. Aplicar os manifests
 
+As senhas ficam em `infra/k8s/secrets.env`, que não vai para o Git. O kustomize transforma esse arquivo no `Secret` `agenda-secrets`:
+
 ```bash
+cp infra/k8s/secrets.env.example infra/k8s/secrets.env   # e troque os valores
 kubectl apply -k infra/k8s
 kubectl -n agenda get pods -w
 ```

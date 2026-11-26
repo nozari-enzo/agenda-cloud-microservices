@@ -1,23 +1,5 @@
-# Valores de exemplo para ambiente acadêmico. Em produção, use um gerenciador de segredos
-# (Sealed Secrets, External Secrets, Vault) em vez de versionar senhas.
-apiVersion: v1
-kind: Secret
-metadata:
-  name: agenda-secrets
-  namespace: agenda
-type: Opaque
-stringData:
-  POSTGRES_USER: agenda
-  POSTGRES_PASSWORD: agenda
-  POSTGRES_DB: agenda
-  DATABASE_URL: postgresql://agenda:agenda@postgres:5432/agenda
-  RABBITMQ_DEFAULT_USER: agenda
-  RABBITMQ_DEFAULT_PASS: agenda
-  RABBITMQ_URL: amqp://agenda:agenda@rabbitmq:5672
-  JWT_SECRET: troque-este-segredo
-  ADMIN_EMAIL: admin@agenda.local
-  ADMIN_PASSWORD: admin123
----
+# Configurações sem segredo. As senhas ficam no Secret "agenda-secrets",
+# gerado pelo kustomization.yaml a partir de secrets.env (fora do Git).
 apiVersion: v1
 kind: ConfigMap
 metadata:

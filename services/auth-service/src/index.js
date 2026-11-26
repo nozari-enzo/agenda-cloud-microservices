@@ -7,7 +7,7 @@ const { logger, client, httpLogger, metricsMiddleware, metricsHandler, retry } =
 const { HttpError, requireAuth, notFound, errorHandler, start } = require('./lib/http');
 
 const PORT = Number(process.env.PORT || 3000);
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
+const { JWT_SECRET } = process.env;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 10 });
 
 const loginAttempts = new client.Counter({
