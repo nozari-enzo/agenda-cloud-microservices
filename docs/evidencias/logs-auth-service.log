@@ -1,0 +1,15 @@
+auth-service-1  | {"level":"warn","time":"2026-11-26T02:30:37.757Z","service":"auth-service","req":{"method":"POST","url":"/login"},"res":{"statusCode":401},"responseTime":64,"msg":"request completed"}
+auth-service-1  | {"level":"warn","time":"2026-11-26T02:30:38.153Z","service":"auth-service","req":{"method":"POST","url":"/login"},"email":"cliente.1795660059696.1@teste.local","msg":"falha de login"}
+auth-service-1  | {"level":"warn","time":"2026-11-26T02:30:38.153Z","service":"auth-service","req":{"method":"POST","url":"/login"},"res":{"statusCode":401},"responseTime":65,"msg":"request completed"}
+auth-service-1  | {"level":"warn","time":"2026-11-26T02:30:47.711Z","service":"auth-service","req":{"method":"POST","url":"/login"},"email":"cliente.1795660059730.2@teste.local","msg":"falha de login"}
+auth-service-1  | {"level":"warn","time":"2026-11-26T02:30:47.712Z","service":"auth-service","req":{"method":"POST","url":"/login"},"res":{"statusCode":401},"responseTime":115,"msg":"request completed"}
+auth-service-1  | {"level":"warn","time":"2026-11-26T02:30:50.224Z","service":"auth-service","req":{"method":"POST","url":"/login"},"email":"cliente.1795660059730.3@teste.local","msg":"falha de login"}
+auth-service-1  | {"level":"warn","time":"2026-11-26T02:30:50.225Z","service":"auth-service","req":{"method":"POST","url":"/login"},"res":{"statusCode":401},"responseTime":70,"msg":"request completed"}
+auth-service-1  | {"level":"warn","time":"2026-11-26T02:30:57.717Z","service":"auth-service","req":{"method":"POST","url":"/login"},"email":"cliente.1795660059731.5@teste.local","msg":"falha de login"}
+auth-service-1  | {"level":"warn","time":"2026-11-26T02:30:57.717Z","service":"auth-service","req":{"method":"POST","url":"/login"},"res":{"statusCode":401},"responseTime":111,"msg":"request completed"}
+auth-service-1  | {"level":"warn","time":"2026-11-26T02:31:04.916Z","service":"auth-service","req":{"method":"POST","url":"/login"},"email":"cliente.1795660059731.4@teste.local","msg":"falha de login"}
+auth-service-1  | {"level":"warn","time":"2026-11-26T02:31:04.917Z","service":"auth-service","req":{"method":"POST","url":"/login"},"res":{"statusCode":401},"responseTime":111,"msg":"request completed"}
+auth-service-1  | {"level":"warn","time":"2026-11-26T02:31:07.446Z","service":"auth-service","req":{"method":"POST","url":"/login"},"email":"cliente.1795660059732.7@teste.local","msg":"falha de login"}
+auth-service-1  | {"level":"warn","time":"2026-11-26T02:31:07.447Z","service":"auth-service","req":{"method":"POST","url":"/login"},"res":{"statusCode":401},"responseTime":74,"msg":"request completed"}
+auth-service-1  | {"level":"warn","time":"2026-11-26T02:31:11.341Z","service":"auth-service","req":{"method":"POST","url":"/login"},"email":"cliente.1795660059732.8@teste.local","msg":"falha de login"}
+auth-service-1  | {"level":"warn","time":"2026-11-26T02:31:11.342Z","service":"auth-service","req":{"method":"POST","url":"/login"},"res":{"statusCode":401},"responseTime":67,"msg":"request completed"}

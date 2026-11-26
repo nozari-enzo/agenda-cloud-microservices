@@ -1,0 +1,120 @@
+# Micro serviço: Deployment (2 réplicas) + Service + HPA (2 a 5) + PodDisruptionBudget.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: booking-service
+  namespace: agenda
+  labels:
+    app: booking-service
+    app.kubernetes.io/part-of: agenda
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: booking-service
+  template:
+    metadata:
+      labels:
+        app: booking-service
+        app.kubernetes.io/part-of: agenda
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3000"
+        prometheus.io/path: /metrics
+    spec:
+      # Tenta espalhar as réplicas em nós diferentes.
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app: booking-service
+      terminationGracePeriodSeconds: 20
+      containers:
+        - name: booking-service
+          image: agenda/booking-service:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+          envFrom:
+            - secretRef:
+                name: agenda-secrets
+            - configMapRef:
+                name: agenda-config
+          env:
+            - name: SERVICE_NAME
+              value: booking-service
+          readinessProbe:
+            httpGet: { path: /ready, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: booking-service
+  namespace: agenda
+  labels:
+    app: booking-service
+    app.kubernetes.io/part-of: agenda
+spec:
+  selector:
+    app: booking-service
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: booking-service
+  namespace: agenda
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: booking-service
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: booking-service
+  namespace: agenda
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: booking-service

@@ -1,0 +1,10 @@
+# Configurações sem segredo. As senhas ficam no Secret "agenda-secrets",
+# gerado pelo kustomization.yaml a partir de secrets.env (fora do Git).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agenda-config
+  namespace: agenda
+data:
+  APP_TIMEZONE: America/Sao_Paulo
+  CATALOG_URL: http://catalog-service:3000

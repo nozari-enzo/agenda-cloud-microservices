@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agenda Fácil</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Agenda Fácil</div>
+    <div id="user-box" class="user-box hidden">
+      <span id="user-name"></span>
+      <button id="logout" class="link">Sair</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Login / cadastro -->
+    <section id="auth-view" class="card narrow">
+      <div class="tabs">
+        <button class="tab active" data-auth="login">Entrar</button>
+        <button class="tab" data-auth="register">Criar conta</button>
+      </div>
+      <form id="login-form" class="form">
+        <label>E-mail <input name="email" type="email" required autocomplete="email"></label>
+        <label>Senha <input name="password" type="password" required autocomplete="current-password"></label>
+        <button type="submit" class="primary">Entrar</button>
+      </form>
+      <form id="register-form" class="form hidden">
+        <label>Nome <input name="name" required autocomplete="name"></label>
+        <label>E-mail <input name="email" type="email" required autocomplete="email"></label>
+        <label>Senha <input name="password" type="password" minlength="6" required autocomplete="new-password"></label>
+        <button type="submit" class="primary">Criar conta</button>
+      </form>
+    </section>
+
+    <!-- Aplicação -->
+    <section id="app-view" class="hidden">
+      <nav class="tabs" id="main-tabs">
+        <button class="tab active" data-view="book">Agendar</button>
+        <button class="tab" data-view="mine">Meus agendamentos</button>
+        <button class="tab admin-only" data-view="day">Agenda do dia</button>
+        <button class="tab admin-only" data-view="catalog">Catálogo</button>
+        <button class="tab admin-only" data-view="notifications">Notificações</button>
+      </nav>
+
+      <div class="view card" data-panel="book">
+        <h2>Novo agendamento</h2>
+        <div class="grid3">
+          <label>Serviço <select id="book-service"></select></label>
+          <label>Profissional <select id="book-professional"></select></label>
+          <label>Data <input id="book-date" type="date"></label>
+        </div>
+        <h3>Horários disponíveis</h3>
+        <div id="slots" class="slots"><p class="muted">Escolha serviço, profissional e data.</p></div>
+      </div>
+
+      <div class="view card hidden" data-panel="mine">
+        <h2>Meus agendamentos</h2>
+        <div id="my-bookings"></div>
+      </div>
+
+      <div class="view card hidden" data-panel="day">
+        <h2>Agenda do dia</h2>
+        <label class="inline">Data <input id="day-date" type="date"></label>
+        <div id="day-bookings"></div>
+      </div>
+
+      <div class="view card hidden" data-panel="catalog">
+        <h2>Catálogo</h2>
+        <div class="grid2">
+          <div>
+            <h3>Serviços</h3>
+            <ul id="catalog-services" class="list"></ul>
+            <form id="service-form" class="form compact">
+              <input name="name" placeholder="Nome do serviço" required>
+              <input name="durationMin" type="number" min="15" step="15" placeholder="Duração (min)" required>
+              <input name="price" type="number" min="0" step="0.01" placeholder="Preço (R$)" required>
+              <button type="submit" class="primary">Adicionar serviço</button>
+            </form>
+          </div>
+          <div>
+            <h3>Profissionais</h3>
+            <ul id="catalog-professionals" class="list"></ul>
+            <form id="professional-form" class="form compact">
+              <input name="name" placeholder="Nome" required>
+              <input name="specialty" placeholder="Especialidade">
+              <button type="submit" class="primary">Adicionar profissional</button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <div class="view card hidden" data-panel="notifications">
+        <h2>Notificações enviadas</h2>
+        <div id="notifications"></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="app.js"></script>
+</body>
+</html>
